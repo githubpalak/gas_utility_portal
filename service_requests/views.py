@@ -78,6 +78,29 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
     
+    @action(detail=True, methods=['get'])
+    def comments(self, request, pk=None):
+        """Get comments for a specific request"""
+        service_request = self.get_object()
+        user = request.user
+        
+        # Get comments based on user role
+        if user.is_staff_member:
+            comments = service_request.comments.all()
+        else:
+            comments = service_request.comments.filter(is_internal=False)
+        
+        serializer = RequestCommentSerializer(comments, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def attachments(self, request, pk=None):
+        """Get attachments for a specific request"""
+        service_request = self.get_object()
+        attachments = service_request.attachments.all()
+        serializer = RequestAttachmentSerializer(attachments, many=True)
+        return Response(serializer.data)
+    
     @action(detail=True, methods=['post'])
     def add_comment(self, request, pk=None):
         service_request = self.get_object()
@@ -202,34 +225,3 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(service_request)
         return Response(serializer.data)
-
-class RequestAttachmentViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for request attachments
-    """
-    serializer_class = RequestAttachmentSerializer
-    permission_classes = [IsCustomerOrStaff]
-    
-    def get_queryset(self):
-        service_request_id = self.kwargs.get('service_request_pk')
-        return RequestAttachment.objects.filter(service_request_id=service_request_id)
-
-class RequestCommentViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for request comments
-    """
-    serializer_class = RequestCommentSerializer
-    permission_classes = [IsCustomerOrStaff]
-    
-    def get_queryset(self):
-        service_request_id = self.kwargs.get('service_request_pk')
-        user = self.request.user
-        
-        # Base queryset for the specific service request
-        queryset = RequestComment.objects.filter(service_request_id=service_request_id)
-        
-        # Staff can see all comments, customers can only see non-internal
-        if not user.is_staff_member:
-            queryset = queryset.filter(is_internal=False)
-        
-        return queryset
